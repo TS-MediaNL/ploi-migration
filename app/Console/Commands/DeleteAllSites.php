@@ -28,7 +28,9 @@ class DeleteAllSites extends Command
      */
     public function handle()
     {
-        $serverFromId = 43406;
+        //For testing clean first for new run
+        
+        $serverFromId = config('ploi.to_server');
 
         $query = [
             'per_page' => 50

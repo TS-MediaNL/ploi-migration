@@ -28,8 +28,8 @@ class MigrateSites extends Command
      */
     public function handle()
     {
-        $serverFromId = 31911;
-        $serverToId = 43406;
+        $serverFromId = config('ploi.from_server');
+        $serverToId = config('ploi.to_server');
 
         $sites = $this->sites($serverFromId);
         if($sites) {
