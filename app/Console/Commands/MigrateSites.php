@@ -31,6 +31,40 @@ class MigrateSites extends Command
         $serverFromId = 31911;
         $serverToId = 43406;
 
+        $sites = $this->sites($serverFromId);
+        if($sites) {
+            foreach($sites as $site) {
+
+                $certificates = $this->certificates($serverFromId, data_get($site,'id'));
+
+                dump('Try to create ' . data_get($site,'domain'));
+
+                $site['root_domain'] = data_get($site,'domain');
+
+                $newSite = $this->createSite($serverToId, $site);
+                if($newSite) {
+
+                    $this->updateSitePhp($serverToId, data_get($newSite,'id'), [
+                        'php_version' => data_get($site,'php_version'),
+                    ]);
+
+                    if($certificates) {
+                        foreach($certificates as $certificate) {
+
+                            $certificate['certificate'] = data_get($certificate,'domain');
+                            $certificate['force'] = true;
+
+                            $this->createSiteCertificate($serverToId, data_get($newSite,'id'), $certificate);
+                        }
+                    }
+                }
+            }
+        }
+
+    }
+
+    public function sites(int $serverId)
+    {
         $query = [
             'per_page' => 50
         ];
@@ -38,26 +72,30 @@ class MigrateSites extends Command
         $client = Http::acceptJson()
             ->withToken(config('ploi.key'));
 
-        $request = $client->get(config('ploi.url') . 'servers/' . $serverFromId . '/sites?' . http_build_query($query));
+        $request = $client->get(config('ploi.url') . 'servers/' . $serverId . '/sites?' . http_build_query($query));
         if($request->status() == 200) {
 
             $response = $request->json();
-
-            if(data_get($response,'data')) {
-
-                foreach(data_get($response,'data') as $data) {
-
-                    dump('Try to create ' . data_get($data,'domain'));
-
-                    $data['root_domain'] = data_get($data,'domain');
-
-                    $this->createNewSite($serverToId, $data);
-                }
-            }
+            return data_get($response,'data');
         }
     }
 
-    public function createNewSite(int $serverId, array $data)
+    public function certificates(int $serverId, int $siteId)
+    {
+        $query = [];
+
+        $client = Http::acceptJson()
+            ->withToken(config('ploi.key'));
+
+        $request = $client->get(config('ploi.url') . 'servers/' . $serverId . '/sites/' . $siteId . '/certificates?' . http_build_query($query));
+        if($request->status() == 200) {
+
+            $response = $request->json();
+            return data_get($response,'data');
+        }
+    }
+
+    public function createSite(int $serverId, array $data)
     {
         $client = Http::acceptJson()
             ->withToken(config('ploi.key'));
@@ -68,18 +106,11 @@ class MigrateSites extends Command
 
             $response = $request->json();
 
-            if(data_get($response,'data.php_version') != data_get($data,'php_version')) {
-
-                dump('Update PHP version to ' . data_get($data,'php_version'));
-
-                $this->updatePHP($serverId, data_get($response,'data.id'), [
-                    'php_version' => data_get($data,'php_version'),
-                ]);
-            }
+            return data_get($response,'data');
         }
     }
 
-    public function updatePHP(int $serverId, int $siteId, array $data)
+    public function updateSitePhp(int $serverId, int $siteId, array $data)
     {
         $client = Http::acceptJson()
             ->withToken(config('ploi.key'));
@@ -87,6 +118,18 @@ class MigrateSites extends Command
         $request = $client->post(config('ploi.url') . 'servers/' . $serverId . '/sites/' . $siteId . '/php-version', $data);
 
         if($request->status() == 200) {
+
+        }
+    }
+
+    public function createSiteCertificate(int $serverId, int $siteId, array $data)
+    {
+        $client = Http::acceptJson()
+            ->withToken(config('ploi.key'));
+
+        $request = $client->post(config('ploi.url') . 'servers/' . $serverId . '/sites/' . $siteId . '/certificates', $data);
+
+        if($request->status() == 201) {
 
         }
     }
