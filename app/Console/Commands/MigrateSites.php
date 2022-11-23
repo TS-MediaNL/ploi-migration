@@ -44,6 +44,8 @@ class MigrateSites extends Command
                 $newSite = $this->createSite($serverToId, $site);
                 if($newSite) {
 
+                    sleep(5);
+
                     $this->updateSitePhp($serverToId, data_get($newSite,'id'), [
                         'php_version' => data_get($site,'php_version'),
                     ]);
@@ -55,6 +57,16 @@ class MigrateSites extends Command
                             $certificate['force'] = true;
 
                             $this->createSiteCertificate($serverToId, data_get($newSite,'id'), $certificate);
+                        }
+                    }
+
+                    $repoConfig = config('ploi.sites');
+                    if(isset($repoConfig[data_get($site,'domain')])) {
+
+                        $siteConfig = $repoConfig[data_get($site,'domain')];
+                        if(data_get($siteConfig,'repo')) {
+
+                            $this->createSiteRepo($serverToId, data_get($newSite, 'id'), data_get($siteConfig,'repo'));
                         }
                     }
                 }
@@ -119,6 +131,7 @@ class MigrateSites extends Command
 
         if($request->status() == 200) {
 
+            dump('Update site PHP version');
         }
     }
 
@@ -131,6 +144,20 @@ class MigrateSites extends Command
 
         if($request->status() == 201) {
 
+            dump('Create site certificate');
+        }
+    }
+
+    public function createSiteRepo(int $serverId, int $siteId, array $data)
+    {
+        $client = Http::acceptJson()
+            ->withToken(config('ploi.key'));
+
+        $request = $client->post(config('ploi.url') . 'servers/' . $serverId . '/sites/' . $siteId . '/repository', $data);
+
+        if($request->status() == 201) {
+
+            dump('Create site repo');
         }
     }
 }
