@@ -5,14 +5,14 @@ namespace App\Console\Commands;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
 
-class MigrateSites extends Command
+class SyncSites extends Command
 {
     /**
      * The name and signature of the console command.
      *
      * @var string
      */
-    protected $signature = 'command:migrate-sites';
+    protected $signature = 'command:sync-sites';
 
     /**
      * The console command description.
@@ -36,62 +36,48 @@ class MigrateSites extends Command
             foreach($sites as $site) {
 
                 $certificates = $this->certificates($serverFromId, data_get($site,'id'));
-                $repository = $this->repository($serverFromId, data_get($site,'id'));
                 $env = $this->env($serverFromId, data_get($site,'id'));
                 $deploy = $this->deploy($serverFromId, data_get($site,'id'));
 
-                dump('Try to create ' . data_get($site,'domain'));
+                dump('Try to update ' . data_get($site,'domain'));
 
                 $site['root_domain'] = data_get($site,'domain');
 
-                $newSite = $this->createSite($serverToId, $site);
-                if($newSite) {
+                $newSites = $this->sites($serverToId, $site);
+                if($newSites) {
 
-                    sleep(5);
+                    foreach($newSites as $newSite) {
 
-                    $this->updateSitePhp($serverToId, data_get($newSite,'id'), [
-                        'php_version' => data_get($site,'php_version'),
-                    ]);
+                        if(data_get($newSite,'domain') == data_get($site,'domain')) {
 
-                    sleep(1);
+                            if ($certificates) {
+                                foreach ($certificates as $certificate) {
 
-                    if($repository) {
+                                    $certificate['certificate'] = data_get($certificate, 'domain');
+                                    $certificate['force'] = true;
 
-                        $this->createSiteRepo($serverToId, data_get($newSite, 'id'), [
-                            'provider' => data_get($repository,'repository.provider'),
-                            'branch' => data_get($repository,'repository.branch'),
-                            'name' => data_get($repository,'repository.user') . '/' . data_get($repository,'repository.name'),
-                        ]);
-                    }
+                                    $this->createSiteCertificate($serverToId, data_get($newSite, 'id'), $certificate);
+                                }
+                            }
 
-                    sleep(1);
+                            sleep(1);
 
-                    if($certificates) {
-                        foreach($certificates as $certificate) {
+                            if ($env) {
 
-                            $certificate['certificate'] = data_get($certificate,'domain');
-                            $certificate['force'] = true;
+                                $this->updateSiteEnv($serverToId, data_get($newSite, 'id'), [
+                                    'content' => $env,
+                                ]);
+                            }
 
-                            $this->createSiteCertificate($serverToId, data_get($newSite,'id'), $certificate);
+                            sleep(1);
+
+                            if ($deploy) {
+
+                                $this->updateSiteDeploy($serverToId, data_get($newSite, 'id'), [
+                                    'deploy_script' => $deploy,
+                                ]);
+                            }
                         }
-                    }
-
-                    sleep(1);
-
-                    if($env) {
-
-                        $this->updateSiteEnv($serverToId, data_get($newSite, 'id'), [
-                            'content' => data_get($env,'deploy_script'),
-                        ]);
-                    }
-
-                    sleep(1);
-
-                    if($deploy) {
-
-                        $this->updateSiteDeploy($serverToId, data_get($newSite, 'id'), [
-                            'deploy_script' => $env,
-                        ]);
                     }
                 }
 
@@ -175,7 +161,7 @@ class MigrateSites extends Command
         if($request->status() == 200) {
 
             $response = $request->json();
-            return data_get($response,'data');
+            return data_get($response,'deploy_script');
         }
     }
 
